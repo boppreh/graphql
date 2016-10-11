@@ -1,3 +1,5 @@
+class Skip(Exception): pass
+
 def resolve(node, link_name, args={}):
     if link_name in node:
         link = node[link_name] 
@@ -9,7 +11,6 @@ def resolve(node, link_name, args={}):
     if callable(link):
         value = link(**args)
     else:
-        assert not args
         value = link
 
     return value
@@ -23,6 +24,9 @@ class ScalarField:
 
     def execute(self, root):
         return (self.alias or self.name, resolve(root, self.name, self.args))
+
+    def __repr__(self):
+        return self.name
 
 class ObjectField:
     def __init__(self, name, fields, alias=None, args=(), directives=()):
@@ -45,6 +49,9 @@ class ObjectField:
             result = dict(field.execute(node) for field in self.fields)
         return (self.alias or self.name, result)
 
+    def __repr__(self):
+        return '{} {{ {} }}'.format(self.name, ' '.join(str(field) for field in self.fields))
+
 def dict_to_field(query_dict, name=None):
     def convert(key, value):
         if value is None:
@@ -53,5 +60,8 @@ def dict_to_field(query_dict, name=None):
             return ObjectField(key, [convert(key, value) for key, value in value.items()])
     return convert(name, query_dict)
 
-query = dict_to_field({'name': None, 'friends': {'name': None}})
-print(query.execute({'name': 'John', 'friends': [{'name': 'Alice'}, {'name': 'Bob'}]}))
+if __name__ == '__main__':
+    data = {'name': 'John', 'friends': [{'name': 'Alice'}, {'name': 'Bob'}]}
+    query = dict_to_field({'name': None, 'friends': {'name': None}})
+    print(query.execute(data))
+    print(query.fields)
