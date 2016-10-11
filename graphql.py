@@ -10,6 +10,11 @@ def resolve(node, link_name, args={}):
 
     if callable(link):
         value = link(**args)
+    elif args:
+        for key, value in args.items():
+            if resolve(node, key) != value:
+                raise Skip()
+        value = link
     else:
         value = link
 
@@ -44,7 +49,12 @@ class ObjectField:
             node = root
 
         if isinstance(node, list):
-            result = [dict(field.execute(item) for field in self.fields) for item in node]
+            result = []
+            for item in node:
+                try:
+                    result.append(dict(field.execute(item) for field in self.fields))
+                except Skip:
+                    pass
         else:
             result = dict(field.execute(node) for field in self.fields)
         return (self.alias or self.name, result)
@@ -57,11 +67,14 @@ def dict_to_field(query_dict, name=None):
         if value is None:
             return ScalarField(key)
         else:
-            return ObjectField(key, [convert(key, value) for key, value in value.items()])
+            # Using sorted() goes against the specs, but Python <3.6 doesn't
+            # keep item order in dicts.
+            return ObjectField(key, [convert(key, value) for key, value in sorted(value.items())])
     return convert(name, query_dict)
 
 if __name__ == '__main__':
-    data = {'name': 'John', 'friends': [{'name': 'Alice'}, {'name': 'Bob'}]}
+    data = {'name': 'John', 'friends': [{'name': 'Alice', 'age': 30}, {'name': 'Bob', 'age': 28}]}
     query = dict_to_field({'name': None, 'friends': {'name': None}})
     print(query.execute(data))
-    print(query.fields)
+    query.fields[0].fields[0].args = {'age': 30}
+    print(query.execute(data))
